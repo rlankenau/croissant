@@ -1,3 +1,93 @@
+// Cookie utility functions
+function setCookie(name, value, days) {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = name + '=' + JSON.stringify(value) + ';expires=' + expires.toUTCString() + ';path=/';
+}
+
+function getCookie(name) {
+    const nameEQ = name + '=';
+    const cookies = document.cookie.split(';');
+    for(let i = 0; i < cookies.length; i++) {
+        let cookie = cookies[i].trim();
+        if (cookie.indexOf(nameEQ) === 0) {
+            try {
+                return JSON.parse(cookie.substring(nameEQ.length, cookie.length));
+            } catch (e) {
+                console.error('Error parsing cookie:', e);
+                return null;
+            }
+        }
+    }
+    return null;
+}
+
+// Generate a simple checksum from column headers
+function generateChecksum(headers) {
+    return headers.join('|').split('').reduce((acc, char) => {
+        return ((acc << 5) - acc) + char.charCodeAt(0) | 0;
+    }, 0).toString(16);
+}
+
+// Save checkbox state to cookies
+function saveCheckboxState(data) {
+    // Generate checksum from all headers
+    const checksum = generateChecksum(data[0]);
+    
+    // Get last two column indices
+    const lastColumnIndex = data[0].length - 1;
+    const secondLastColumnIndex = lastColumnIndex - 1;
+    
+    // Store checkbox states for both columns
+    const checkboxStates = {
+        checksum: checksum,
+        columns: {}
+    };
+    
+    // Save states for second last column
+    checkboxStates.columns[secondLastColumnIndex] = {};
+    document.querySelectorAll(`input[type="checkbox"][data-column="${secondLastColumnIndex}"]`).forEach(checkbox => {
+        const rowIndex = checkbox.dataset.row;
+        checkboxStates.columns[secondLastColumnIndex][rowIndex] = checkbox.checked;
+    });
+    
+    // Save states for last column
+    checkboxStates.columns[lastColumnIndex] = {};
+    document.querySelectorAll(`input[type="checkbox"][data-column="${lastColumnIndex}"]`).forEach(checkbox => {
+        const rowIndex = checkbox.dataset.row;
+        checkboxStates.columns[lastColumnIndex][rowIndex] = checkbox.checked;
+    });
+    
+    // Save to cookie (keep for 30 days)
+    setCookie('checkboxStates', checkboxStates, 30);
+}
+
+// Load checkbox state from cookies
+function loadCheckboxState(data) {
+    const savedState = getCookie('checkboxStates');
+    if (!savedState) return false;
+    
+    // Verify checksum to ensure data structure hasn't changed
+    const currentChecksum = generateChecksum(data[0]);
+    if (savedState.checksum !== currentChecksum) {
+        console.log('Data structure has changed, ignoring saved state');
+        return false;
+    }
+    
+    // Apply saved states to checkboxes
+    Object.keys(savedState.columns).forEach(columnIndex => {
+        const column = savedState.columns[columnIndex];
+        Object.keys(column).forEach(rowIndex => {
+            const checkbox = document.querySelector(`input[type="checkbox"][data-column="${columnIndex}"][data-row="${rowIndex}"]`);
+            if (checkbox) {
+                checkbox.checked = column[rowIndex];
+            }
+        });
+    });
+    
+    return true;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Fetch the CSV file
     fetch('data/data.csv')
@@ -13,6 +103,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Display the data in the table
             displayTable(parsedData);
+            
+            // Try to load saved checkbox states
+            const stateLoaded = loadCheckboxState(parsedData);
+            if (stateLoaded) {
+                showStatusMessage('Checkbox states loaded from saved data');
+            }
+            
+            // Add event listeners for checkbox changes
+            setupCheckboxEventListeners(parsedData);
         })
         .catch(error => {
             console.error('Error fetching or parsing CSV:', error);
@@ -122,10 +221,66 @@ function displayTable(data) {
     }
 }
 
+// Setup event listeners for checkbox changes
+function setupCheckboxEventListeners(data) {
+    // Add change event listener to all checkboxes
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            saveCheckboxState(data);
+        });
+    });
+}
+
 // Function to reset all checkboxes in a column
 function resetColumn(columnIndex) {
     const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-column="${columnIndex}"]`);
     checkboxes.forEach(checkbox => {
         checkbox.checked = false;
     });
+    
+    // Update cookie after reset
+    fetch('data/data.csv')
+        .then(response => response.text())
+        .then(csvData => {
+            const parsedData = parseCSV(csvData);
+            saveCheckboxState(parsedData);
+        })
+        .catch(error => console.error('Error updating cookie after reset:', error));
+}
+
+// Debug function to clear cookies
+function clearAllCookies() {
+    document.cookie.split(";").forEach(function(c) { 
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+    });
+    console.log("All cookies cleared");
+}
+
+// Helper function to show status messages
+function showStatusMessage(message, isSuccess = true) {
+    // Create or get status element
+    let statusElement = document.getElementById('status-message');
+    if (!statusElement) {
+        statusElement = document.createElement('div');
+        statusElement.id = 'status-message';
+        document.querySelector('.container').insertBefore(statusElement, document.querySelector('.table-container'));
+    }
+    
+    // Set message and class
+    statusElement.textContent = message;
+    statusElement.className = isSuccess ? 'status-success' : 'status-error';
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        statusElement.style.opacity = '0';
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+        }, 500);
+    }, 3000);
+    
+    // Show element
+    statusElement.style.display = 'block';
+    setTimeout(() => {
+        statusElement.style.opacity = '1';
+    }, 10);
 }
