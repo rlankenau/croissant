@@ -17,6 +17,15 @@ body {
     border: 1px solid #333;
 }
 
+.footer {
+    text-align: center;
+    margin-top: 20px;
+    color: #888;
+    font-size: 0.85em;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    font-family: 'Cinzel Decorative', cursive;
+}
+
 h1 {
     text-align: center;
     color: #a30000;
