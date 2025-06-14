@@ -25,6 +25,7 @@ h1 {
     letter-spacing: 3px;
     font-weight: bold;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    font-family: 'Cinzel Decorative', cursive;
 }
 
 .table-container {
