@@ -150,7 +150,6 @@ input[type="checkbox"]:focus {
     color: #cc7c7c;
     border-left: 4px solid #9a4c4c;
 }
-}
 
 /* Style for checkbox cells */
 td input[type="checkbox"] {
